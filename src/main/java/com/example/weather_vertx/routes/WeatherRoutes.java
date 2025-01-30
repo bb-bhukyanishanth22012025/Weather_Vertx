@@ -7,23 +7,23 @@ import io.vertx.reactivex.ext.web.handler.BodyHandler;
 import io.vertx.reactivex.sqlclient.Pool;
 
 public class WeatherRoutes {
-    
-    private final Router router;
-    private final Pool mySQLPool;
-    private final WeatherController weatherController;
 
-    public WeatherRoutes(Vertx vertx, Pool mySQLPool) {
-        this.router = Router.router(vertx);
-        this.mySQLPool = mySQLPool;
-        this.weatherController = new WeatherController(mySQLPool);
+  private final Router router;
+  private final Pool pool;
+  private final WeatherController weatherController;
 
-        router.route().handler(BodyHandler.create());
+  public WeatherRoutes(Vertx vertx, Pool pool) {
+    this.router = Router.router(vertx);
+    this.pool = pool;
+    this.weatherController = new WeatherController(pool);
 
-        router.put("/weather").handler(weatherController.updateWeatherData());
-        router.delete("/weather").handler(weatherController.deleteWeatherData());
-    }
+    router.route().handler(BodyHandler.create());
 
-    public Router getRouter() {
-        return router;
-    }
+    router.put("/weather").handler(weatherController.updateWeatherData());
+    router.delete("/weather").handler(weatherController.deleteWeatherData());
+  }
+
+  public Router getRouter() {
+    return router;
+  }
 }
