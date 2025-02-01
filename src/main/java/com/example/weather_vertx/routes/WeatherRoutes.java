@@ -6,6 +6,7 @@ import io.vertx.reactivex.ext.web.Router;
 import io.vertx.reactivex.ext.web.handler.BodyHandler;
 import io.vertx.reactivex.sqlclient.Pool;
 
+
 public class WeatherRoutes {
 
   private final Router router;

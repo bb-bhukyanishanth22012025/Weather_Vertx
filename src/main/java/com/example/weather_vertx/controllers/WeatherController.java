@@ -12,7 +12,7 @@ import java.time.format.DateTimeFormatter;
 public class WeatherController implements IWeatherController {
 
   private final Pool pool;
-  private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS");
+  private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm");
 
   public WeatherController(Pool pool) {
     this.pool = pool;
@@ -22,11 +22,9 @@ public class WeatherController implements IWeatherController {
   public Handler<RoutingContext> updateWeatherData() {
     return routingContext -> {
       try {
-
         Double latitude = Double.parseDouble(routingContext.request().getParam("latitude"));
         Double longitude = Double.parseDouble(routingContext.request().getParam("longitude"));
         String forecastTimeStr = routingContext.request().getParam("forecastTime");
-
 
         JsonObject requestBody = routingContext.getBodyAsJson();
         if (requestBody == null) {
@@ -34,16 +32,13 @@ public class WeatherController implements IWeatherController {
           return;
         }
 
-
         Double newTemperature = requestBody.getDouble("temperature");
         if (newTemperature == null) {
           routingContext.response().setStatusCode(400).end("Temperature is required.");
           return;
         }
 
-
         LocalDateTime forecastTime = LocalDateTime.parse(forecastTimeStr, FORMATTER);
-
 
         String formattedForecastTime = forecastTime.format(FORMATTER);
 
