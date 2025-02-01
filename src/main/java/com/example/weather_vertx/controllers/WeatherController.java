@@ -8,6 +8,7 @@ import io.vertx.reactivex.sqlclient.Tuple;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 
 public class WeatherController implements IWeatherController {
 
@@ -22,47 +23,41 @@ public class WeatherController implements IWeatherController {
   public Handler<RoutingContext> updateWeatherData() {
     return routingContext -> {
       try {
-        Double latitude = Double.parseDouble(routingContext.request().getParam("latitude"));
-        Double longitude = Double.parseDouble(routingContext.request().getParam("longitude"));
-        String forecastTimeStr = routingContext.request().getParam("forecastTime");
+        Double latitude = validateLatitude(routingContext.request().getParam("latitude"));
+        Double longitude = validateLongitude(routingContext.request().getParam("longitude"));
+        LocalDateTime forecastTime = validateForecastTime(routingContext.request().getParam("forecastTime"));
 
         JsonObject requestBody = routingContext.getBodyAsJson();
         if (requestBody == null) {
-          routingContext.response().setStatusCode(400).end("Invalid JSON body.");
+          sendErrorResponse(routingContext, 400, "Invalid JSON body.");
           return;
         }
 
         Double newTemperature = requestBody.getDouble("temperature");
         if (newTemperature == null) {
-          routingContext.response().setStatusCode(400).end("Temperature is required.");
+          sendErrorResponse(routingContext, 400, "Temperature is required.");
           return;
         }
-
-        LocalDateTime forecastTime = LocalDateTime.parse(forecastTimeStr, FORMATTER);
-
-        String formattedForecastTime = forecastTime.format(FORMATTER);
 
         String updateQuery = "UPDATE weather_weatherforecast SET temperature = ? WHERE latitude = ? AND longitude = ? AND forecast_time = ?";
 
         pool.preparedQuery(updateQuery)
-          .rxExecute(Tuple.of(newTemperature, latitude, longitude, formattedForecastTime))
+          .rxExecute(Tuple.of(newTemperature, latitude, longitude, forecastTime.format(FORMATTER)))
           .subscribe(
             updateResult -> {
               if (updateResult.rowCount() == 0) {
-                routingContext.response().setStatusCode(404).end("Weather data not found.");
+                sendErrorResponse(routingContext, 404, "Weather data not found.");
               } else {
-                JsonObject responseJson = new JsonObject()
-                  .put("message", "Weather data updated successfully.");
-                routingContext.response()
-                  .putHeader("Content-Type", "application/json")
-                  .end(responseJson.encodePrettily());
+                sendSuccessResponse(routingContext, "Weather data updated successfully.");
               }
             },
-            error -> routingContext.response().setStatusCode(500).end("Database error: " + error.getMessage())
+            error -> sendErrorResponse(routingContext, 500, "Database error: " + error.getMessage())
           );
 
+      } catch (IllegalArgumentException e) {
+        sendErrorResponse(routingContext, 400, e.getMessage());
       } catch (Exception e) {
-        routingContext.response().setStatusCode(400).end("Invalid input: " + e.getMessage());
+        sendErrorResponse(routingContext, 400, "Invalid input: " + e.getMessage());
       }
     };
   }
@@ -71,36 +66,82 @@ public class WeatherController implements IWeatherController {
   public Handler<RoutingContext> deleteWeatherData() {
     return routingContext -> {
       try {
-        Double latitude = Double.parseDouble(routingContext.request().getParam("latitude"));
-        Double longitude = Double.parseDouble(routingContext.request().getParam("longitude"));
-        String forecastTimeStr = routingContext.request().getParam("forecastTime");
-
-
-        LocalDateTime forecastTime = LocalDateTime.parse(forecastTimeStr, FORMATTER);
-
-        String formattedForecastTime = forecastTime.format(FORMATTER);
+        Double latitude = validateLatitude(routingContext.request().getParam("latitude"));
+        Double longitude = validateLongitude(routingContext.request().getParam("longitude"));
+        LocalDateTime forecastTime = validateForecastTime(routingContext.request().getParam("forecastTime"));
 
         String deleteQuery = "DELETE FROM weather_weatherforecast WHERE latitude = ? AND longitude = ? AND forecast_time = ?";
 
         pool.preparedQuery(deleteQuery)
-          .rxExecute(Tuple.of(latitude, longitude, formattedForecastTime))
+          .rxExecute(Tuple.of(latitude, longitude, forecastTime.format(FORMATTER)))
           .subscribe(
             result -> {
               if (result.rowCount() == 0) {
-                routingContext.response().setStatusCode(404).end("Weather data not found.");
+                sendErrorResponse(routingContext, 404, "Weather data not found.");
               } else {
-                JsonObject responseJson = new JsonObject()
-                  .put("message", "Weather data deleted successfully.");
-                routingContext.response()
-                  .putHeader("Content-Type", "application/json")
-                  .end(responseJson.encodePrettily());
+                sendSuccessResponse(routingContext, "Weather data deleted successfully.");
               }
             },
-            error -> routingContext.response().setStatusCode(500).end("Database error: " + error.getMessage())
+            error -> sendErrorResponse(routingContext, 500, "Database error: " + error.getMessage())
           );
+
+      } catch (IllegalArgumentException e) {
+        sendErrorResponse(routingContext, 400, e.getMessage());
       } catch (Exception e) {
-        routingContext.response().setStatusCode(400).end("Invalid input: " + e.getMessage());
+        sendErrorResponse(routingContext, 400, "Invalid input: " + e.getMessage());
       }
     };
+  }
+
+  /**
+   * Validates and parses latitude.
+   */
+  private Double validateLatitude(String latitudeStr) {
+    if (latitudeStr == null) throw new IllegalArgumentException("Latitude is required.");
+    try {
+      double latitude = Double.parseDouble(latitudeStr);
+      if (latitude < -90 || latitude > 90) throw new IllegalArgumentException("Latitude must be between -90 and 90.");
+      return latitude;
+    } catch (NumberFormatException e) {
+      throw new IllegalArgumentException("Invalid latitude format.");
+    }
+  }
+
+
+  private Double validateLongitude(String longitudeStr) {
+    if (longitudeStr == null) throw new IllegalArgumentException("Longitude is required.");
+    try {
+      double longitude = Double.parseDouble(longitudeStr);
+      if (longitude < -180 || longitude > 180) throw new IllegalArgumentException("Longitude must be between -180 and 180.");
+      return longitude;
+    } catch (NumberFormatException e) {
+      throw new IllegalArgumentException("Invalid longitude format.");
+    }
+  }
+
+
+  private LocalDateTime validateForecastTime(String forecastTimeStr) {
+    if (forecastTimeStr == null) throw new IllegalArgumentException("Forecast time is required.");
+    try {
+      return LocalDateTime.parse(forecastTimeStr, FORMATTER);
+    } catch (DateTimeParseException e) {
+      throw new IllegalArgumentException("Invalid forecastTime format.");
+    }
+  }
+
+
+  private void sendErrorResponse(RoutingContext routingContext, int statusCode, String message) {
+    routingContext.response()
+      .setStatusCode(statusCode)
+      .putHeader("Content-Type", "application/json")
+      .end(new JsonObject().put("error", message).encodePrettily());
+  }
+
+
+  private void sendSuccessResponse(RoutingContext routingContext, String message) {
+    routingContext.response()
+      .setStatusCode(200)
+      .putHeader("Content-Type", "application/json")
+      .end(new JsonObject().put("message", message).encodePrettily());
   }
 }

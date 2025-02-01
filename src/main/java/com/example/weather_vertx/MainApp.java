@@ -8,9 +8,9 @@ public class MainApp{
         Vertx vertx = Vertx.vertx();
         vertx.deployVerticle(new MainVerticle(), res -> {
             if (res.succeeded()) {
-                System.out.println("HttpRouterVerticle deployed successfully.");
+                System.out.println("MainVerticle deployed successfully.");
             } else {
-                System.err.println("Failed to deploy HttpRouterVerticle: " + res.cause());
+                System.err.println("Failed to deploy MainVerticle: " + res.cause());
             }
         });
     }
